@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5b7cff"/>
+      <stop offset="1" stop-color="#4a4fe0"/>
+    </linearGradient>
+    <linearGradient id="red" x1="681" y1="681" x2="859" y2="859" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff5a5a"/>
+      <stop offset="1" stop-color="#e22b2b"/>
+    </linearGradient>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="12" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1024" height="1024" rx="230" fill="url(#bg)"/>
+
+  <g fill="none" stroke="#ffffff" stroke-width="50" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M452 320 L320 320 L320 452"/>
+    <path d="M572 320 L704 320 L704 452"/>
+    <path d="M320 572 L320 704 L452 704"/>
+    <path d="M704 572 L704 704 L572 704"/>
+  </g>
+
+  <line x1="372" y1="512" x2="652" y2="512" stroke="#5fe9c9" stroke-width="32"
+        stroke-linecap="round" filter="url(#glow)"/>
+
+  <g transform="rotate(45 770 770)">
+    <rect x="681" y="681" width="178" height="178" rx="34" fill="#ffffff"/>
+    <rect x="695" y="695" width="150" height="150" rx="28" fill="url(#red)"/>
+  </g>
+</svg>
