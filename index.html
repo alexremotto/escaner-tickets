@@ -218,10 +218,58 @@ function autoDetect(){
     return arr.map(p=>({x:p.x,y:p.y}));
   }catch(e){ return null; }
 }
+// Detector de documento en JS puro: busca una "página" clara (brillante) sobre
+// un fondo más oscuro con borde evidente. Devuelve 4 esquinas o null si no está
+// claro (entonces se deja la posición por defecto).
+function detectDocument(srcCanvas){
+  try{
+    const W=Math.min(400, srcCanvas.width), scale=W/srcCanvas.width, H=Math.max(1,Math.round(srcCanvas.height*scale));
+    const c=document.createElement('canvas'); c.width=W; c.height=H;
+    const ctx=c.getContext('2d',{willReadFrequently:true}); ctx.drawImage(srcCanvas,0,0,W,H);
+    const d=ctx.getImageData(0,0,W,H).data, N=W*H;
+    const lum=new Float32Array(N), hist=new Uint32Array(256); let mn=255,mx=0;
+    for(let i=0,p=0;i<N;i++,p+=4){ const l=(0.299*d[p]+0.587*d[p+1]+0.114*d[p+2])|0;
+      lum[i]=l; hist[l]++; if(l<mn)mn=l; if(l>mx)mx=l; }
+    if(mx-mn<40) return null;                       // poco contraste → nada claro
+    let sum=0; for(let i=0;i<256;i++) sum+=i*hist[i];   // umbral de Otsu
+    let sumB=0,wB=0,bestV=-1,thr=127;
+    for(let t=0;t<256;t++){ wB+=hist[t]; if(!wB) continue; const wF=N-wB; if(!wF) break;
+      sumB+=t*hist[t]; const mB=sumB/wB, mF=(sum-sumB)/wF, v=wB*wF*(mB-mF)*(mB-mF);
+      if(v>bestV){ bestV=v; thr=t; } }
+    const fg=new Uint8Array(N); for(let i=0;i<N;i++) fg[i]=lum[i]>thr?1:0;
+    // mayor componente conexa (4-conn) + sus 4 esquinas extremas
+    const vis=new Uint8Array(N), stack=new Int32Array(N); let comp=null;
+    for(let s=0;s<N;s++){
+      if(!fg[s]||vis[s]) continue;
+      let sp=0; stack[sp++]=s; vis[s]=1; let size=0;
+      let aMin=1e9,aMax=-1e9,bMin=1e9,bMax=-1e9, tl,tr,br,bl;
+      while(sp){
+        const idx=stack[--sp]; size++;
+        const x=idx%W, y=(idx/W)|0, a=x+y, b=x-y;
+        if(a<aMin){aMin=a;tl=[x,y];} if(a>aMax){aMax=a;br=[x,y];}
+        if(b>bMax){bMax=b;tr=[x,y];} if(b<bMin){bMin=b;bl=[x,y];}
+        if(x>0){const n=idx-1; if(fg[n]&&!vis[n]){vis[n]=1;stack[sp++]=n;}}
+        if(x<W-1){const n=idx+1; if(fg[n]&&!vis[n]){vis[n]=1;stack[sp++]=n;}}
+        if(y>0){const n=idx-W; if(fg[n]&&!vis[n]){vis[n]=1;stack[sp++]=n;}}
+        if(y<H-1){const n=idx+W; if(fg[n]&&!vis[n]){vis[n]=1;stack[sp++]=n;}}
+      }
+      if(!comp||size>comp.size) comp={size,tl,tr,br,bl};
+    }
+    if(!comp) return null;
+    const frac=comp.size/N;
+    if(frac<0.12 || frac>0.9) return null;          // ni minúsculo ni sin borde
+    const {tl,tr,br,bl}=comp, minSide=Math.min(W,H)*0.18;
+    const dd=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1]);
+    if(dd(tl,tr)<minSide||dd(tr,br)<minSide||dd(br,bl)<minSide||dd(bl,tl)<minSide) return null;
+    const up=p=>({x:p[0]/scale, y:p[1]/scale});
+    return [up(tl),up(tr),up(br),up(bl)];
+  }catch(e){ return null; }
+}
+
 function openEditor(){
   const w=captureCanvas.width, h=captureCanvas.height;
   $('editImg').src = captureCanvas.toDataURL('image/jpeg',0.92);
-  corners = autoDetect() || defaultCorners(w,h);
+  corners = detectDocument(captureCanvas) || autoDetect() || defaultCorners(w,h);
   const svg=$('overlay'); svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
   const r=Math.max(w,h)*0.022;
   svg.innerHTML =
@@ -361,8 +409,9 @@ function buildPdfBase64(){
     const w=pg.w*s, h=pg.h*s, x=(pw-w)/2, y=(ph-h)/2;
     doc.addImage(pg.url, 'JPEG', x, y, w, h);
   });
-  return doc.output('datauristring'); // data:application/pdf;base64,...
+  return doc.output('datauristring').split('base64,').pop(); // base64 puro
 }
+function b64Bytes(s){ return Math.floor((s||'').length*3/4); }
 
 /* ---------- envío ---------- */
 $('btnUpload').onclick = ()=>{
@@ -375,7 +424,7 @@ $('btnUpload').onclick = ()=>{
     let pdf;
     try{ pdf=buildPdfBase64(); }
     catch(e){ show('screen-pages'); toast('Error generando PDF: '+e.message); return; }
-    if(dataUrlBytes(pdf) > MAX_PDF_BYTES){
+    if(b64Bytes(pdf) > MAX_PDF_BYTES){
       show('screen-pages');
       toast('El PDF es demasiado grande. Elimina alguna página e inténtalo de nuevo.');
       return;
